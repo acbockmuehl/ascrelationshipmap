@@ -17,10 +17,7 @@
       <header class="hero">
         <div>
           <p class="eyebrow">Collective network mapper</p>
-          <h1>See your relationships spread across the UK.</h1>
-          <p class="intro">
-            Add people you know, tag their local authority and role, and watch the network branch out from UK regions into local authority nodes.
-          </p>
+          <h1 class="dashboard-title">ASC Relationship Map</h1>
         </div>
         <div class="hero-stats" id="hero-stats"></div>
       </header>
@@ -69,7 +66,6 @@
 
             <div class="form-actions">
               <button type="submit" class="primary-button">Add to network</button>
-              <a id="export-link" class="secondary-button" href="/api/contacts.csv" download="asc-relationships.csv">Export CSV</a>
             </div>
           </form>
         </section>
@@ -94,6 +90,10 @@
           <div id="network-tree" class="network-tree"></div>
         </section>
       </main>
+
+      <section class="page-actions">
+        <a id="export-link" class="secondary-button export-button" href="/api/contacts.csv" download="asc-relationships.csv">Export all relationships as CSV</a>
+      </section>
     </div>
 
     <template id="stat-card-template">
