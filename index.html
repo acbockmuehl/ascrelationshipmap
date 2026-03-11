@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASC Relationship Map</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Collective network mapper</p>
+          <h1>See your relationships spread across the UK.</h1>
+          <p class="intro">
+            Add people you know, tag their local authority and role, and watch the network branch out from UK regions into local authority nodes.
+          </p>
+        </div>
+        <div class="hero-stats" id="hero-stats"></div>
+      </header>
+
+      <main class="app-grid">
+        <section class="panel form-panel">
+          <div class="panel-heading">
+            <h2>Add a contact</h2>
+            <p>Entries are stored in this browser so you can build the map live in workshops or team sessions.</p>
+          </div>
+
+          <form id="contact-form" class="contact-form">
+            <label>
+              Name
+              <input id="name" name="name" type="text" maxlength="80" placeholder="e.g. Aisha Rahman" required />
+            </label>
+
+            <label>
+              Role
+              <input id="role" name="role" type="text" maxlength="120" placeholder="e.g. Director of Adult Social Care" required />
+            </label>
+
+            <label>
+              UK region
+              <select id="region" name="region" required></select>
+            </label>
+
+            <label>
+              Local authority
+              <input
+                id="authority"
+                name="authority"
+                type="text"
+                maxlength="120"
+                list="authority-suggestions"
+                placeholder="e.g. Leeds City Council"
+                required
+              />
+              <datalist id="authority-suggestions"></datalist>
+            </label>
+
+            <button type="submit" class="primary-button">Add to network</button>
+          </form>
+        </section>
+
+        <section class="panel map-panel">
+          <div class="panel-heading">
+            <h2>Regional map</h2>
+            <p>Select a region to inspect the authority network branching out from it.</p>
+          </div>
+
+          <div class="map-stage">
+            <svg id="uk-map" viewBox="0 0 560 760" aria-label="Stylised map of UK regions"></svg>
+            <div id="map-overlay" class="map-overlay" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="panel network-panel">
+          <div class="panel-heading">
+            <h2 id="network-title">Network pullout</h2>
+            <p id="network-subtitle">Choose a region to inspect the authority tree.</p>
+          </div>
+          <div id="network-tree" class="network-tree"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="stat-card-template">
+      <article class="stat-card">
+        <span class="stat-value"></span>
+        <span class="stat-label"></span>
+      </article>
+    </template>
+
+    <template id="authority-card-template">
+      <article class="authority-card">
+        <div class="authority-node">
+          <h3></h3>
+          <p></p>
+        </div>
+        <div class="people-list"></div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>

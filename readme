@@ -1,1 +1,24 @@
+# ASC Relationship Map
 
+Static client-side app for capturing contacts across the UK and visualising them as a regional network.
+
+## Run locally
+
+Because this is a dependency-free app, any static file server will work.
+
+Example:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000`.
+
+## Features
+
+- Responsive web/mobile layout
+- Stylised UK regional map with contact counts
+- Add contacts by name, role, local authority, and UK region
+- Network pullout grouped as `Region -> Local Authority -> People`
+- Local persistence using browser `localStorage`
+- Seeded example data to make the map immediately readable
