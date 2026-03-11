@@ -92,6 +92,7 @@ const state = {
 
 const elements = {
   form: document.getElementById("contact-form"),
+  contributor: document.getElementById("contributor"),
   name: document.getElementById("name"),
   role: document.getElementById("role"),
   region: document.getElementById("region"),
@@ -150,13 +151,14 @@ async function handleSubmit(event) {
   event.preventDefault();
 
   const contact = {
+    contributor: elements.contributor.value.trim(),
     name: elements.name.value.trim(),
     role: elements.role.value.trim(),
     region: elements.region.value,
     authority: elements.authority.value.trim()
   };
 
-  if (!contact.name || !contact.role || !contact.region || !contact.authority || state.isSaving) {
+  if (!contact.contributor || !contact.name || !contact.role || !contact.region || !contact.authority || state.isSaving) {
     return;
   }
 
@@ -421,7 +423,7 @@ function renderNetworkTree() {
       personNode.innerHTML = `
         <div>
           <span class="person-name">${escapeHtml(person.name)}</span>
-          <span class="person-role">${escapeHtml(person.role)}</span>
+          <span class="person-role">${escapeHtml(person.role)} · Added by ${escapeHtml(person.contributor || "Unknown")}</span>
         </div>
         <button class="ghost-button" type="button" data-delete-id="${person.id}" aria-label="Remove ${escapeHtml(person.name)}">Remove</button>
       `;

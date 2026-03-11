@@ -29,10 +29,15 @@
         <section class="panel form-panel">
           <div class="panel-heading">
             <h2>Add a contact</h2>
-            <p>Entries are stored in this browser so you can build the map live in workshops or team sessions.</p>
+            <p>Add shared relationships to the map and export the full network when you need a spreadsheet.</p>
           </div>
 
           <form id="contact-form" class="contact-form">
+            <label>
+              Contributor name
+              <input id="contributor" name="contributor" type="text" maxlength="80" placeholder="e.g. Anna Bockmuehl" required />
+            </label>
+
             <label>
               Name
               <input id="name" name="name" type="text" maxlength="80" placeholder="e.g. Aisha Rahman" required />
@@ -62,7 +67,10 @@
               <datalist id="authority-suggestions"></datalist>
             </label>
 
-            <button type="submit" class="primary-button">Add to network</button>
+            <div class="form-actions">
+              <button type="submit" class="primary-button">Add to network</button>
+              <a id="export-link" class="secondary-button" href="/api/contacts.csv" download="asc-relationships.csv">Export CSV</a>
+            </div>
           </form>
         </section>
 

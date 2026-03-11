@@ -2,8 +2,10 @@ import json
 import os
 import sqlite3
 import uuid
+import csv
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from io import StringIO
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -21,6 +23,7 @@ def ensure_database() -> None:
             """
             CREATE TABLE IF NOT EXISTS contacts (
                 id TEXT PRIMARY KEY,
+                contributor TEXT NOT NULL,
                 name TEXT NOT NULL,
                 role TEXT NOT NULL,
                 authority TEXT NOT NULL,
@@ -29,6 +32,11 @@ def ensure_database() -> None:
             )
             """
         )
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(contacts)").fetchall()
+        }
+        if "contributor" not in columns:
+            connection.execute("ALTER TABLE contacts ADD COLUMN contributor TEXT NOT NULL DEFAULT ''")
         connection.commit()
 
 
@@ -37,7 +45,7 @@ def list_contacts() -> list[dict]:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             """
-            SELECT id, name, role, authority, region
+            SELECT id, contributor, name, role, authority, region
             FROM contacts
             ORDER BY created_at DESC, rowid DESC
             """
@@ -48,6 +56,7 @@ def list_contacts() -> list[dict]:
 def create_contact(payload: dict) -> dict:
     contact = {
         "id": str(uuid.uuid4()),
+        "contributor": payload["contributor"].strip(),
         "name": payload["name"].strip(),
         "role": payload["role"].strip(),
         "authority": payload["authority"].strip(),
@@ -56,13 +65,29 @@ def create_contact(payload: dict) -> dict:
     with sqlite3.connect(DB_PATH) as connection:
         connection.execute(
             """
-            INSERT INTO contacts (id, name, role, authority, region)
-            VALUES (:id, :name, :role, :authority, :region)
+            INSERT INTO contacts (id, contributor, name, role, authority, region)
+            VALUES (:id, :contributor, :name, :role, :authority, :region)
             """,
             contact,
         )
         connection.commit()
     return contact
+
+
+def export_contacts_csv() -> bytes:
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "contributor", "name", "role", "authority", "region"])
+    for contact in list_contacts():
+        writer.writerow([
+            contact["id"],
+            contact.get("contributor", ""),
+            contact["name"],
+            contact["role"],
+            contact["authority"],
+            contact["region"],
+        ])
+    return output.getvalue().encode("utf-8")
 
 
 def delete_contact(contact_id: str) -> bool:
@@ -81,6 +106,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/contacts":
             self.send_json(HTTPStatus.OK, list_contacts())
             return
+        if parsed.path == "/api/contacts.csv":
+            self.send_csv(HTTPStatus.OK, export_contacts_csv(), "asc-relationships.csv")
+            return
         super().do_GET()
 
     def do_POST(self) -> None:
@@ -93,7 +121,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         if payload is None:
             return
 
-        required_fields = ["name", "role", "authority", "region"]
+        required_fields = ["contributor", "name", "role", "authority", "region"]
         if any(not str(payload.get(field, "")).strip() for field in required_fields):
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "All contact fields are required."})
             return
@@ -140,6 +168,14 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
+
+    def send_csv(self, status: HTTPStatus, payload: bytes, filename: str) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
 
 def main() -> None:
