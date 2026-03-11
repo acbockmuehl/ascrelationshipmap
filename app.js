@@ -99,7 +99,6 @@ const elements = {
   authority: document.getElementById("authority"),
   authoritySuggestions: document.getElementById("authority-suggestions"),
   map: document.getElementById("uk-map"),
-  mapOverlay: document.getElementById("map-overlay"),
   networkTitle: document.getElementById("network-title"),
   networkSubtitle: document.getElementById("network-subtitle"),
   networkTree: document.getElementById("network-tree"),
@@ -238,7 +237,6 @@ function setSavingState(isSaving) {
 function render() {
   renderHeroStats();
   renderMapCounts();
-  renderOverlay();
   renderNetworkTree();
 }
 
@@ -320,71 +318,33 @@ function renderMapCounts() {
     accumulator[contact.region] = (accumulator[contact.region] || 0) + 1;
     return accumulator;
   }, {});
+  const maxCount = Math.max(0, ...Object.values(counts));
 
   elements.map.querySelectorAll(".region").forEach((group) => {
     const regionId = group.dataset.regionId;
     const count = counts[regionId] || 0;
     group.classList.toggle("is-active", regionId === state.selectedRegionId);
     group.querySelector(".region-count-text").textContent = String(count);
+    group.querySelector(".region-shape").setAttribute("fill", getRegionFill(count, maxCount));
   });
 }
 
-function renderOverlay() {
-  const region = state.regionShapes.find((entry) => entry.id === state.selectedRegionId);
-  const authorities = groupContactsByAuthority(state.contacts.filter((contact) => contact.region === state.selectedRegionId));
-
-  elements.mapOverlay.innerHTML = "";
-
-  if (!region || authorities.length === 0) {
-    return;
+function getRegionFill(count, maxCount) {
+  if (count === 0 || maxCount === 0) {
+    return "#d9ddd8";
   }
 
-  const positions = getOverlayPositions(region, Math.min(authorities.length, 3));
-
-  authorities.slice(0, positions.length).forEach((authorityEntry, index) => {
-    const position = positions[index];
-    const line = document.createElement("div");
-    const lineStartX = region.anchor.x;
-    const lineStartY = region.anchor.y;
-    const lineEndX = position.side === "right" ? position.x - 78 : position.x + 78;
-    const lineEndY = position.y;
-    const deltaX = lineEndX - lineStartX;
-    const deltaY = lineEndY - lineStartY;
-    const lineLength = Math.hypot(deltaX, deltaY);
-    const lineAngle = Math.atan2(deltaY, deltaX);
-
-    line.className = "connector-line";
-    line.style.left = `${(lineStartX / MAP_WIDTH) * 100}%`;
-    line.style.top = `${(lineStartY / MAP_HEIGHT) * 100}%`;
-    line.style.width = `${(lineLength / MAP_WIDTH) * 100}%`;
-    line.style.transform = `rotate(${lineAngle}rad)`;
-    elements.mapOverlay.appendChild(line);
-
-    const card = document.createElement("article");
-    card.className = `overlay-node ${position.side}`;
-    card.style.left = `${(position.x / MAP_WIDTH) * 100}%`;
-    card.style.top = `${(position.y / MAP_HEIGHT) * 100}%`;
-    card.innerHTML = `
-      <h3>${escapeHtml(authorityEntry.authority)}</h3>
-      <p>${authorityEntry.people.length} ${authorityEntry.people.length === 1 ? "contact" : "contacts"}</p>
-    `;
-    elements.mapOverlay.appendChild(card);
-  });
-}
-
-function getOverlayPositions(region, count) {
-  const side = region.overlaySide;
-  const spacing = 56;
-  const startY = Math.max(70, Math.min(MAP_HEIGHT - 70 - spacing * (count - 1), region.anchor.y - spacing));
-  const x = side === "right"
-    ? Math.min(MAP_WIDTH - 54, region.bbox.maxX + 110)
-    : Math.max(54, region.bbox.minX - 110);
-
-  return Array.from({ length: count }, (_, index) => ({
-    x,
-    y: startY + index * spacing,
-    side
-  }));
+  const intensity = count / maxCount;
+  if (intensity <= 0.25) {
+    return "#9fd3b9";
+  }
+  if (intensity <= 0.5) {
+    return "#63b38d";
+  }
+  if (intensity <= 0.75) {
+    return "#2f8d66";
+  }
+  return "#14543f";
 }
 
 function renderNetworkTree() {

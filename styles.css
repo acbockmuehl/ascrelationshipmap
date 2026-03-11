@@ -269,19 +269,24 @@ h1 {
 
 .region {
   cursor: pointer;
-  transition: transform 180ms ease, fill 180ms ease, opacity 180ms ease;
+  transition: transform 180ms ease, opacity 180ms ease;
 }
 
 .region-shape {
-  fill: #17191c;
+  fill: #d9ddd8;
   stroke: rgba(255, 255, 255, 0.72);
   stroke-width: 1.6;
   stroke-linejoin: round;
+  transition: fill 180ms ease, stroke 180ms ease, stroke-width 180ms ease;
 }
 
-.region:hover .region-shape,
+.region:hover .region-shape {
+  stroke: rgba(13, 122, 95, 0.8);
+}
+
 .region.is-active .region-shape {
-  fill: #0d7a5f;
+  stroke: #0d7a5f;
+  stroke-width: 2.6;
 }
 
 .region-label {
@@ -309,64 +314,6 @@ h1 {
   font-weight: 800;
   text-anchor: middle;
   pointer-events: none;
-}
-
-.map-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.connector-line {
-  position: absolute;
-  height: 2px;
-  transform-origin: 0 50%;
-  background: linear-gradient(90deg, rgba(13, 122, 95, 0.65), rgba(13, 122, 95, 0.12));
-  opacity: 0;
-  animation: rise-in 220ms ease forwards;
-}
-
-.overlay-node {
-  position: absolute;
-  min-width: 138px;
-  max-width: 180px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255, 252, 247, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 16px 30px rgba(31, 43, 36, 0.16);
-  transform: translate(-50%, -50%);
-  opacity: 0;
-  animation: rise-in 240ms ease forwards;
-}
-
-.overlay-node::before {
-  content: "";
-  position: absolute;
-  width: 22px;
-  height: 2px;
-  background: rgba(13, 122, 95, 0.35);
-  top: 50%;
-}
-
-.overlay-node.left::before {
-  right: -14px;
-}
-
-.overlay-node.right::before {
-  left: -14px;
-}
-
-.overlay-node h3 {
-  font-size: 1rem;
-  line-height: 1.1;
-  margin-bottom: 4px;
-}
-
-.overlay-node p {
-  margin: 0;
-  font-size: 0.84rem;
-  color: var(--muted);
 }
 
 .network-tree {
@@ -525,12 +472,6 @@ h1 {
   .map-stage {
     min-height: 540px;
     padding: 6px;
-  }
-
-  .overlay-node {
-    min-width: 122px;
-    max-width: 148px;
-    padding: 10px 12px;
   }
 
   .form-actions {
