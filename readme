@@ -1,24 +1,33 @@
 # ASC Relationship Map
 
-Static client-side app for capturing contacts across the UK and visualising them as a regional network.
+Web app for capturing contacts across the UK and visualising them as a regional network.
 
 ## Run locally
 
-Because this is a dependency-free app, any static file server will work.
+This app now uses a small Python server plus SQLite so relationships are shared across devices.
 
 Example:
 
 ```bash
-python3 -m http.server 8000
+python3 server.py
 ```
 
 Then open `http://localhost:8000`.
 
+## Deployment on Render
+
+Deploy this as a `Web Service`, not a `Static Site`.
+
+- Build command: leave blank
+- Start command: `python3 server.py`
+
+For durable data on Render, attach a persistent disk and point `DATA_DIR` or `DATABASE_PATH` at that disk mount.
+
 ## Features
 
 - Responsive web/mobile layout
-- Stylised UK regional map with contact counts
+- UK regional map rendered from GeoJSON boundaries
 - Add contacts by name, role, local authority, and UK region
 - Network pullout grouped as `Region -> Local Authority -> People`
-- Local persistence using browser `localStorage`
-- Seeded example data to make the map immediately readable
+- Shared server-backed persistence via SQLite
+- Add and remove relationships from any device using the same deployed app

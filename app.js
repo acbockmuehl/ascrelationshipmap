@@ -1,4 +1,3 @@
-const STORAGE_KEY = "asc-relationship-map-contacts";
 const MAP_WIDTH = 560;
 const MAP_HEIGHT = 760;
 const MAP_PADDING = 24;
@@ -82,20 +81,13 @@ const REGION_CONFIG = [
 const REGION_LOOKUP = Object.fromEntries(REGION_CONFIG.map((region) => [region.id, region]));
 const GEO_NAME_TO_ID = Object.fromEntries(REGION_CONFIG.map((region) => [region.geoName, region.id]));
 
-const SAMPLE_CONTACTS = [
-  { id: createId(), name: "Aisha Rahman", role: "Director of Adult Social Care", authority: "Leeds City Council", region: "yorkshire-humber" },
-  { id: createId(), name: "Tom Bennett", role: "Integrated Care Lead", authority: "Manchester City Council", region: "north-west" },
-  { id: createId(), name: "Carys Morgan", role: "Principal Social Worker", authority: "Cardiff Council", region: "wales" },
-  { id: createId(), name: "Neil McKay", role: "Commissioning Manager", authority: "Glasgow City Council", region: "scotland" },
-  { id: createId(), name: "Priya Shah", role: "Housing Partnership Lead", authority: "Kent County Council", region: "south-east" },
-  { id: createId(), name: "Martha Osei", role: "Transformation Programme Manager", authority: "Birmingham City Council", region: "west-midlands" }
-];
-
 const state = {
-  contacts: loadContacts(),
+  contacts: [],
   selectedRegionId: "yorkshire-humber",
   highlightedContactId: null,
-  regionShapes: []
+  regionShapes: [],
+  isSaving: false,
+  loadError: null
 };
 
 const elements = {
@@ -112,7 +104,8 @@ const elements = {
   networkTree: document.getElementById("network-tree"),
   heroStats: document.getElementById("hero-stats"),
   statCardTemplate: document.getElementById("stat-card-template"),
-  authorityCardTemplate: document.getElementById("authority-card-template")
+  authorityCardTemplate: document.getElementById("authority-card-template"),
+  submitButton: document.querySelector("#contact-form button[type='submit']")
 };
 
 init();
@@ -121,34 +114,8 @@ async function init() {
   renderRegionOptions();
   renderAuthoritySuggestions(state.selectedRegionId);
   bindEvents();
-  await loadRegionShapes();
+  await Promise.all([loadRegionShapes(), loadContacts()]);
   render();
-}
-
-function createId() {
-  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function loadContacts() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_CONTACTS));
-    return SAMPLE_CONTACTS;
-  }
-
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : SAMPLE_CONTACTS;
-  } catch {
-    return SAMPLE_CONTACTS;
-  }
-}
-
-function saveContacts() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.contacts));
 }
 
 function bindEvents() {
@@ -157,11 +124,312 @@ function bindEvents() {
   elements.networkTree.addEventListener("click", handleNetworkActions);
 }
 
+async function loadContacts() {
+  try {
+    const response = await fetch("/api/contacts");
+    if (!response.ok) {
+      throw new Error(`Failed to load contacts: ${response.status}`);
+    }
+    state.contacts = await response.json();
+    state.loadError = null;
+  } catch (error) {
+    state.loadError = "Unable to load shared relationships from the server.";
+    state.contacts = [];
+    console.error(error);
+  }
+}
+
 async function loadRegionShapes() {
   const response = await fetch("uk_regions.geojson");
   const geojson = await response.json();
   state.regionShapes = buildRegionShapes(geojson);
   renderMap();
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+
+  const contact = {
+    name: elements.name.value.trim(),
+    role: elements.role.value.trim(),
+    region: elements.region.value,
+    authority: elements.authority.value.trim()
+  };
+
+  if (!contact.name || !contact.role || !contact.region || !contact.authority || state.isSaving) {
+    return;
+  }
+
+  setSavingState(true);
+
+  try {
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(contact)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save contact: ${response.status}`);
+    }
+
+    const createdContact = await response.json();
+    state.contacts.unshift(createdContact);
+    state.selectedRegionId = createdContact.region;
+    state.highlightedContactId = createdContact.id;
+    state.loadError = null;
+    elements.form.reset();
+    elements.region.value = state.selectedRegionId;
+    renderAuthoritySuggestions(state.selectedRegionId);
+    render();
+  } catch (error) {
+    state.loadError = "Unable to save this relationship right now.";
+    console.error(error);
+    render();
+  } finally {
+    setSavingState(false);
+  }
+}
+
+function handleRegionFieldChange(event) {
+  renderAuthoritySuggestions(event.target.value);
+}
+
+async function handleNetworkActions(event) {
+  const button = event.target.closest("[data-delete-id]");
+  if (!button || state.isSaving) {
+    return;
+  }
+
+  const { deleteId } = button.dataset;
+  setSavingState(true);
+
+  try {
+    const response = await fetch(`/api/contacts/${encodeURIComponent(deleteId)}`, {
+      method: "DELETE"
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete contact: ${response.status}`);
+    }
+
+    state.contacts = state.contacts.filter((contact) => contact.id !== deleteId);
+    if (state.highlightedContactId === deleteId) {
+      state.highlightedContactId = null;
+    }
+    state.loadError = null;
+    render();
+  } catch (error) {
+    state.loadError = "Unable to remove this relationship right now.";
+    console.error(error);
+    render();
+  } finally {
+    setSavingState(false);
+  }
+}
+
+function setSavingState(isSaving) {
+  state.isSaving = isSaving;
+  elements.submitButton.disabled = isSaving;
+  elements.submitButton.textContent = isSaving ? "Saving..." : "Add to network";
+}
+
+function render() {
+  renderHeroStats();
+  renderMapCounts();
+  renderOverlay();
+  renderNetworkTree();
+}
+
+function renderHeroStats() {
+  const grouped = groupContacts(state.contacts);
+  const totals = [
+    { label: "Contacts mapped", value: state.contacts.length },
+    { label: "Authorities represented", value: Object.keys(grouped.authorities).length },
+    { label: "Regions active", value: Object.keys(grouped.regions).length }
+  ];
+
+  elements.heroStats.innerHTML = "";
+  totals.forEach((item) => {
+    const node = elements.statCardTemplate.content.firstElementChild.cloneNode(true);
+    node.querySelector(".stat-value").textContent = item.value;
+    node.querySelector(".stat-label").textContent = item.label;
+    elements.heroStats.appendChild(node);
+  });
+}
+
+function renderRegionOptions() {
+  elements.region.innerHTML = "";
+  REGION_CONFIG.forEach((region) => {
+    const option = document.createElement("option");
+    option.value = region.id;
+    option.textContent = region.shortLabel;
+    elements.region.appendChild(option);
+  });
+  elements.region.value = state.selectedRegionId;
+}
+
+function renderAuthoritySuggestions(regionId) {
+  const region = REGION_LOOKUP[regionId] || REGION_CONFIG[0];
+  elements.authoritySuggestions.innerHTML = "";
+  region.suggestionAuthorities.forEach((authority) => {
+    const option = document.createElement("option");
+    option.value = authority;
+    elements.authoritySuggestions.appendChild(option);
+  });
+}
+
+function renderMap() {
+  elements.map.innerHTML = "";
+
+  state.regionShapes.forEach((region) => {
+    const group = createSvgNode("g", {
+      class: `region ${region.id === state.selectedRegionId ? "is-active" : ""}`,
+      "data-region-id": region.id,
+      tabindex: "0",
+      role: "button",
+      "aria-label": `${region.shortLabel} region`
+    });
+
+    group.appendChild(createSvgNode("path", { class: "region-shape", d: region.path }));
+    group.appendChild(createSvgNode("text", { class: "region-label", x: region.label.x.toFixed(2), y: region.label.y.toFixed(2) }, region.shortLabel));
+    group.appendChild(createSvgNode("circle", { class: "region-count", cx: region.label.x.toFixed(2), cy: (region.label.y - 26).toFixed(2), r: 16 }));
+    group.appendChild(createSvgNode("text", { class: "region-count-text", x: region.label.x.toFixed(2), y: (region.label.y - 21).toFixed(2) }, "0"));
+
+    group.addEventListener("click", () => {
+      state.selectedRegionId = region.id;
+      state.highlightedContactId = null;
+      render();
+    });
+    group.addEventListener("keydown", (keyEvent) => {
+      if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+        keyEvent.preventDefault();
+        state.selectedRegionId = region.id;
+        state.highlightedContactId = null;
+        render();
+      }
+    });
+
+    elements.map.appendChild(group);
+  });
+}
+
+function renderMapCounts() {
+  const counts = state.contacts.reduce((accumulator, contact) => {
+    accumulator[contact.region] = (accumulator[contact.region] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  elements.map.querySelectorAll(".region").forEach((group) => {
+    const regionId = group.dataset.regionId;
+    const count = counts[regionId] || 0;
+    group.classList.toggle("is-active", regionId === state.selectedRegionId);
+    group.querySelector(".region-count-text").textContent = String(count);
+  });
+}
+
+function renderOverlay() {
+  const region = state.regionShapes.find((entry) => entry.id === state.selectedRegionId);
+  const authorities = groupContactsByAuthority(state.contacts.filter((contact) => contact.region === state.selectedRegionId));
+
+  elements.mapOverlay.innerHTML = "";
+
+  if (!region || authorities.length === 0) {
+    return;
+  }
+
+  const positions = getOverlayPositions(region, Math.min(authorities.length, 3));
+
+  authorities.slice(0, positions.length).forEach((authorityEntry, index) => {
+    const position = positions[index];
+    const line = document.createElement("div");
+    const lineStartX = region.anchor.x;
+    const lineStartY = region.anchor.y;
+    const lineEndX = position.side === "right" ? position.x - 78 : position.x + 78;
+    const lineEndY = position.y;
+    const deltaX = lineEndX - lineStartX;
+    const deltaY = lineEndY - lineStartY;
+    const lineLength = Math.hypot(deltaX, deltaY);
+    const lineAngle = Math.atan2(deltaY, deltaX);
+
+    line.className = "connector-line";
+    line.style.left = `${(lineStartX / MAP_WIDTH) * 100}%`;
+    line.style.top = `${(lineStartY / MAP_HEIGHT) * 100}%`;
+    line.style.width = `${(lineLength / MAP_WIDTH) * 100}%`;
+    line.style.transform = `rotate(${lineAngle}rad)`;
+    elements.mapOverlay.appendChild(line);
+
+    const card = document.createElement("article");
+    card.className = `overlay-node ${position.side}`;
+    card.style.left = `${(position.x / MAP_WIDTH) * 100}%`;
+    card.style.top = `${(position.y / MAP_HEIGHT) * 100}%`;
+    card.innerHTML = `
+      <h3>${escapeHtml(authorityEntry.authority)}</h3>
+      <p>${authorityEntry.people.length} ${authorityEntry.people.length === 1 ? "contact" : "contacts"}</p>
+    `;
+    elements.mapOverlay.appendChild(card);
+  });
+}
+
+function getOverlayPositions(region, count) {
+  const side = region.overlaySide;
+  const spacing = 56;
+  const startY = Math.max(70, Math.min(MAP_HEIGHT - 70 - spacing * (count - 1), region.anchor.y - spacing));
+  const x = side === "right"
+    ? Math.min(MAP_WIDTH - 54, region.bbox.maxX + 110)
+    : Math.max(54, region.bbox.minX - 110);
+
+  return Array.from({ length: count }, (_, index) => ({
+    x,
+    y: startY + index * spacing,
+    side
+  }));
+}
+
+function renderNetworkTree() {
+  const region = REGION_LOOKUP[state.selectedRegionId];
+  const authorities = groupContactsByAuthority(state.contacts.filter((contact) => contact.region === state.selectedRegionId));
+
+  elements.networkTitle.textContent = region ? `${region.shortLabel} network` : "Network pullout";
+  elements.networkSubtitle.textContent = state.loadError
+    ? state.loadError
+    : region
+      ? `${authorities.length} local ${authorities.length === 1 ? "authority" : "authorities"} branching from ${region.shortLabel}.`
+      : "Choose a region to inspect the authority tree.";
+
+  if (!region || authorities.length === 0) {
+    const emptyMessage = state.loadError
+      ? state.loadError
+      : "No contacts mapped in this region yet. Add one from the form to make the branch appear.";
+    elements.networkTree.innerHTML = `<div class="network-empty">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+
+  elements.networkTree.innerHTML = "";
+
+  authorities.forEach((authorityEntry) => {
+    const node = elements.authorityCardTemplate.content.firstElementChild.cloneNode(true);
+    node.querySelector("h3").textContent = authorityEntry.authority;
+    node.querySelector("p").textContent = `${authorityEntry.people.length} ${authorityEntry.people.length === 1 ? "person" : "people"}`;
+
+    const peopleList = node.querySelector(".people-list");
+    authorityEntry.people.forEach((person) => {
+      const personNode = document.createElement("article");
+      personNode.className = "person-chip";
+      if (person.id === state.highlightedContactId) {
+        personNode.classList.add("flash");
+      }
+      personNode.innerHTML = `
+        <div>
+          <span class="person-name">${escapeHtml(person.name)}</span>
+          <span class="person-role">${escapeHtml(person.role)}</span>
+        </div>
+        <button class="ghost-button" type="button" data-delete-id="${person.id}" aria-label="Remove ${escapeHtml(person.name)}">Remove</button>
+      `;
+      peopleList.appendChild(personNode);
+    });
+
+    elements.networkTree.appendChild(node);
+  });
 }
 
 function buildRegionShapes(geojson) {
@@ -180,7 +448,6 @@ function buildRegionShapes(geojson) {
 
     projectedFeatures.push({
       id: regionId,
-      geoName: feature.properties.rgn19nm,
       polygons: projectedPolygons
     });
   });
@@ -324,244 +591,6 @@ function getRingCentroid(ring) {
   };
 }
 
-function handleSubmit(event) {
-  event.preventDefault();
-
-  const contact = {
-    id: createId(),
-    name: elements.name.value.trim(),
-    role: elements.role.value.trim(),
-    region: elements.region.value,
-    authority: elements.authority.value.trim()
-  };
-
-  if (!contact.name || !contact.role || !contact.region || !contact.authority) {
-    return;
-  }
-
-  state.contacts.unshift(contact);
-  state.selectedRegionId = contact.region;
-  state.highlightedContactId = contact.id;
-  saveContacts();
-  elements.form.reset();
-  elements.region.value = state.selectedRegionId;
-  renderAuthoritySuggestions(state.selectedRegionId);
-  render();
-}
-
-function handleRegionFieldChange(event) {
-  renderAuthoritySuggestions(event.target.value);
-}
-
-function handleNetworkActions(event) {
-  const button = event.target.closest("[data-delete-id]");
-  if (!button) {
-    return;
-  }
-
-  const { deleteId } = button.dataset;
-  state.contacts = state.contacts.filter((contact) => contact.id !== deleteId);
-  if (state.highlightedContactId === deleteId) {
-    state.highlightedContactId = null;
-  }
-  saveContacts();
-  render();
-}
-
-function render() {
-  renderHeroStats();
-  renderMapCounts();
-  renderOverlay();
-  renderNetworkTree();
-}
-
-function renderHeroStats() {
-  const grouped = groupContacts(state.contacts);
-  const totals = [
-    { label: "Contacts mapped", value: state.contacts.length },
-    { label: "Authorities represented", value: Object.keys(grouped.authorities).length },
-    { label: "Regions active", value: Object.keys(grouped.regions).length }
-  ];
-
-  elements.heroStats.innerHTML = "";
-  totals.forEach((item) => {
-    const node = elements.statCardTemplate.content.firstElementChild.cloneNode(true);
-    node.querySelector(".stat-value").textContent = item.value;
-    node.querySelector(".stat-label").textContent = item.label;
-    elements.heroStats.appendChild(node);
-  });
-}
-
-function renderRegionOptions() {
-  elements.region.innerHTML = "";
-  REGION_CONFIG.forEach((region) => {
-    const option = document.createElement("option");
-    option.value = region.id;
-    option.textContent = region.shortLabel;
-    elements.region.appendChild(option);
-  });
-  elements.region.value = state.selectedRegionId;
-}
-
-function renderAuthoritySuggestions(regionId) {
-  const region = REGION_LOOKUP[regionId] || REGION_CONFIG[0];
-  elements.authoritySuggestions.innerHTML = "";
-  region.suggestionAuthorities.forEach((authority) => {
-    const option = document.createElement("option");
-    option.value = authority;
-    elements.authoritySuggestions.appendChild(option);
-  });
-}
-
-function renderMap() {
-  elements.map.innerHTML = "";
-
-  state.regionShapes.forEach((region) => {
-    const group = createSvgNode("g", {
-      class: `region ${region.id === state.selectedRegionId ? "is-active" : ""}`,
-      "data-region-id": region.id,
-      tabindex: "0",
-      role: "button",
-      "aria-label": `${region.shortLabel} region`
-    });
-
-    group.appendChild(createSvgNode("path", { class: "region-shape", d: region.path }));
-    group.appendChild(createSvgNode("text", { class: "region-label", x: region.label.x.toFixed(2), y: region.label.y.toFixed(2) }, region.shortLabel));
-    group.appendChild(createSvgNode("circle", { class: "region-count", cx: region.label.x.toFixed(2), cy: (region.label.y - 26).toFixed(2), r: 16 }));
-    group.appendChild(createSvgNode("text", { class: "region-count-text", x: region.label.x.toFixed(2), y: (region.label.y - 21).toFixed(2) }, "0"));
-
-    group.addEventListener("click", () => {
-      state.selectedRegionId = region.id;
-      state.highlightedContactId = null;
-      render();
-    });
-    group.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        state.selectedRegionId = region.id;
-        state.highlightedContactId = null;
-        render();
-      }
-    });
-
-    elements.map.appendChild(group);
-  });
-}
-
-function renderMapCounts() {
-  const counts = state.contacts.reduce((accumulator, contact) => {
-    accumulator[contact.region] = (accumulator[contact.region] || 0) + 1;
-    return accumulator;
-  }, {});
-
-  elements.map.querySelectorAll(".region").forEach((group) => {
-    const regionId = group.dataset.regionId;
-    const count = counts[regionId] || 0;
-    group.classList.toggle("is-active", regionId === state.selectedRegionId);
-    group.querySelector(".region-count-text").textContent = String(count);
-  });
-}
-
-function renderOverlay() {
-  const region = state.regionShapes.find((entry) => entry.id === state.selectedRegionId);
-  const authorities = groupContactsByAuthority(state.contacts.filter((contact) => contact.region === state.selectedRegionId));
-
-  elements.mapOverlay.innerHTML = "";
-
-  if (!region || authorities.length === 0) {
-    return;
-  }
-
-  const positions = getOverlayPositions(region, Math.min(authorities.length, 3));
-
-  authorities.slice(0, positions.length).forEach((authorityEntry, index) => {
-    const position = positions[index];
-    const line = document.createElement("div");
-    const lineStartX = region.anchor.x;
-    const lineStartY = region.anchor.y;
-    const lineEndX = position.side === "right" ? position.x - 78 : position.x + 78;
-    const lineEndY = position.y;
-    const deltaX = lineEndX - lineStartX;
-    const deltaY = lineEndY - lineStartY;
-    const lineLength = Math.hypot(deltaX, deltaY);
-    const lineAngle = Math.atan2(deltaY, deltaX);
-
-    line.className = "connector-line";
-    line.style.left = `${(lineStartX / MAP_WIDTH) * 100}%`;
-    line.style.top = `${(lineStartY / MAP_HEIGHT) * 100}%`;
-    line.style.width = `${(lineLength / MAP_WIDTH) * 100}%`;
-    line.style.transform = `rotate(${lineAngle}rad)`;
-    elements.mapOverlay.appendChild(line);
-
-    const card = document.createElement("article");
-    card.className = `overlay-node ${position.side}`;
-    card.style.left = `${(position.x / MAP_WIDTH) * 100}%`;
-    card.style.top = `${(position.y / MAP_HEIGHT) * 100}%`;
-    card.innerHTML = `
-      <h3>${escapeHtml(authorityEntry.authority)}</h3>
-      <p>${authorityEntry.people.length} ${authorityEntry.people.length === 1 ? "contact" : "contacts"}</p>
-    `;
-    elements.mapOverlay.appendChild(card);
-  });
-}
-
-function getOverlayPositions(region, count) {
-  const side = region.overlaySide;
-  const spacing = 56;
-  const startY = Math.max(70, Math.min(MAP_HEIGHT - 70 - spacing * (count - 1), region.anchor.y - spacing));
-  const x = side === "right"
-    ? Math.min(MAP_WIDTH - 54, region.bbox.maxX + 110)
-    : Math.max(54, region.bbox.minX - 110);
-
-  return Array.from({ length: count }, (_, index) => ({
-    x,
-    y: startY + index * spacing,
-    side
-  }));
-}
-
-function renderNetworkTree() {
-  const region = REGION_LOOKUP[state.selectedRegionId];
-  const authorities = groupContactsByAuthority(state.contacts.filter((contact) => contact.region === state.selectedRegionId));
-
-  elements.networkTitle.textContent = region ? `${region.shortLabel} network` : "Network pullout";
-  elements.networkSubtitle.textContent = region
-    ? `${authorities.length} local ${authorities.length === 1 ? "authority" : "authorities"} branching from ${region.shortLabel}.`
-    : "Choose a region to inspect the authority tree.";
-
-  if (!region || authorities.length === 0) {
-    elements.networkTree.innerHTML = `<div class="network-empty">No contacts mapped in this region yet. Add one from the form to make the branch appear.</div>`;
-    return;
-  }
-
-  elements.networkTree.innerHTML = "";
-
-  authorities.forEach((authorityEntry) => {
-    const node = elements.authorityCardTemplate.content.firstElementChild.cloneNode(true);
-    node.querySelector("h3").textContent = authorityEntry.authority;
-    node.querySelector("p").textContent = `${authorityEntry.people.length} ${authorityEntry.people.length === 1 ? "person" : "people"}`;
-
-    const peopleList = node.querySelector(".people-list");
-    authorityEntry.people.forEach((person) => {
-      const personNode = document.createElement("article");
-      personNode.className = "person-chip";
-      if (person.id === state.highlightedContactId) {
-        personNode.classList.add("flash");
-      }
-      personNode.innerHTML = `
-        <div>
-          <span class="person-name">${escapeHtml(person.name)}</span>
-          <span class="person-role">${escapeHtml(person.role)}</span>
-        </div>
-        <button class="ghost-button" type="button" data-delete-id="${person.id}" aria-label="Remove ${escapeHtml(person.name)}">Remove</button>
-      `;
-      peopleList.appendChild(personNode);
-    });
-
-    elements.networkTree.appendChild(node);
-  });
-}
-
 function groupContacts(contacts) {
   return contacts.reduce(
     (accumulator, contact) => {
@@ -604,7 +633,7 @@ function createSvgNode(tag, attributes, text) {
 }
 
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
