@@ -318,33 +318,19 @@ function renderMapCounts() {
     accumulator[contact.region] = (accumulator[contact.region] || 0) + 1;
     return accumulator;
   }, {});
-  const maxCount = Math.max(0, ...Object.values(counts));
 
   elements.map.querySelectorAll(".region").forEach((group) => {
     const regionId = group.dataset.regionId;
     const count = counts[regionId] || 0;
     group.classList.toggle("is-active", regionId === state.selectedRegionId);
+    group.classList.toggle("has-contacts", count > 0);
     group.querySelector(".region-count-text").textContent = String(count);
-    group.querySelector(".region-shape").setAttribute("fill", getRegionFill(count, maxCount));
+    group.querySelector(".region-shape").setAttribute("fill", getRegionFill(count));
   });
 }
 
-function getRegionFill(count, maxCount) {
-  if (count === 0 || maxCount === 0) {
-    return "#d9ddd8";
-  }
-
-  const intensity = count / maxCount;
-  if (intensity <= 0.25) {
-    return "#9fd3b9";
-  }
-  if (intensity <= 0.5) {
-    return "#63b38d";
-  }
-  if (intensity <= 0.75) {
-    return "#2f8d66";
-  }
-  return "#14543f";
+function getRegionFill(count) {
+  return count > 0 ? "#1f5fae" : "#cfe2f7";
 }
 
 function renderNetworkTree() {
