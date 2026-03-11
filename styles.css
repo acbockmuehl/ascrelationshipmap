@@ -257,7 +257,7 @@ h1 {
   padding: 10px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at top, rgba(207, 226, 247, 0.92), rgba(207, 226, 247, 0.24) 30%, transparent 55%),
+    radial-gradient(circle at top, rgba(216, 239, 229, 0.85), rgba(216, 239, 229, 0.2) 30%, transparent 55%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.82));
   overflow: hidden;
 }
@@ -273,42 +273,44 @@ h1 {
 }
 
 .region-shape {
-  fill: #cfe2f7;
-  stroke: rgba(255, 255, 255, 0.92);
+  fill: #17191c;
+  stroke: rgba(255, 255, 255, 0.72);
   stroke-width: 1.6;
   stroke-linejoin: round;
   transition: fill 180ms ease, stroke 180ms ease, stroke-width 180ms ease;
 }
 
 .region:hover .region-shape {
-  stroke: #6f97c8;
+  fill: #0d7a5f;
 }
 
 .region.is-active .region-shape {
-  stroke: #6f97c8;
+  fill: #0d7a5f;
+  stroke: rgba(255, 255, 255, 0.72);
   stroke-width: 2.6;
 }
 
 .region-label {
-  fill: #4e78ab;
+  fill: rgba(255, 255, 255, 0.92);
   font-size: 9px;
   font-weight: 800;
   text-anchor: middle;
   pointer-events: none;
 }
 
-.region.has-contacts .region-label {
+.region:hover .region-label,
+.region.is-active .region-label {
   fill: #ffffff;
 }
 
 .region-count {
   fill: rgba(255, 251, 245, 0.96);
-  stroke: rgba(44, 91, 153, 0.32);
+  stroke: rgba(18, 54, 41, 0.28);
   stroke-width: 1.2;
 }
 
 .region-count-text {
-  fill: #1f3f68;
+  fill: #123629;
   font-size: 10px;
   font-weight: 800;
   text-anchor: middle;

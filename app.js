@@ -323,14 +323,8 @@ function renderMapCounts() {
     const regionId = group.dataset.regionId;
     const count = counts[regionId] || 0;
     group.classList.toggle("is-active", regionId === state.selectedRegionId);
-    group.classList.toggle("has-contacts", count > 0);
     group.querySelector(".region-count-text").textContent = String(count);
-    group.querySelector(".region-shape").setAttribute("fill", getRegionFill(count));
   });
-}
-
-function getRegionFill(count) {
-  return count > 0 ? "#1f5fae" : "#cfe2f7";
 }
 
 function renderNetworkTree() {
